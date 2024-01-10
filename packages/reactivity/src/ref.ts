@@ -1,18 +1,21 @@
+import {
+  hasChanged,
+  isArray,
+  isFunction,
+  isObject,
+  type IfAny,
+} from '@vue/shared'
 import type { ComputedRef } from './computed'
+import { ComputedRefImpl } from './computed'
+import { DirtyLevels, TrackOpTypes, TriggerOpTypes } from './constants'
+import { createDep, type Dep } from './dep'
 import {
   activeEffect,
   shouldTrack,
   trackEffect,
   triggerEffects,
 } from './effect'
-import { DirtyLevels, TrackOpTypes, TriggerOpTypes } from './constants'
-import {
-  type IfAny,
-  hasChanged,
-  isArray,
-  isFunction,
-  isObject,
-} from '@vue/shared'
+import type { ShallowReactiveMarker } from './reactive'
 import {
   isProxy,
   isReactive,
@@ -21,9 +24,6 @@ import {
   toRaw,
   toReactive,
 } from './reactive'
-import type { ShallowReactiveMarker } from './reactive'
-import { type Dep, createDep } from './dep'
-import { ComputedRefImpl } from './computed'
 import { getDepFromReactive } from './reactiveEffect'
 
 declare const RefSymbol: unique symbol
@@ -90,6 +90,7 @@ export function triggerRefValue(
 
 /**
  * Checks if a value is a ref object.
+ * 通过对象的__v_isRef判断
  *
  * @param r - The value to inspect.
  * @see {@link https://vuejs.org/api/reactivity-utilities.html#isref}

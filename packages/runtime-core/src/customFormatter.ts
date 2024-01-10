@@ -1,4 +1,4 @@
-import { type Ref, isReactive, isReadonly, isRef, toRaw } from '@vue/reactivity'
+import { isReactive, isReadonly, isRef, toRaw, type Ref } from '@vue/reactivity'
 import { EMPTY_OBJ, extend, isArray, isFunction, isObject } from '@vue/shared'
 import { isShallow } from '../../reactivity/src/reactive'
 import type { ComponentInternalInstance, ComponentOptions } from './component'
@@ -10,14 +10,19 @@ export function initCustomFormatter() {
     return
   }
 
+  // 打印vue实例的颜色
   const vueStyle = { style: 'color:#3ba776' }
+  // 打印vue实例内number的颜色
   const numberStyle = { style: 'color:#1677ff' }
+  // 打印vue实例内string的颜色
   const stringStyle = { style: 'color:#f5222d' }
+  // 打印vue实例内boolean的颜色
   const keywordStyle = { style: 'color:#eb2f96' }
 
   // custom formatter for Chrome
   // https://www.mattzeunert.com/2016/02/19/custom-chrome-devtools-object-formatters.html
   const formatter = {
+    // 控制台数据标题
     header(obj: unknown) {
       // TODO also format ComponentPublicInstance & ctx.slots/attrs in setup
       if (!isObject(obj)) {
@@ -56,9 +61,11 @@ export function initCustomFormatter() {
       }
       return null
     },
+    // 是否可展开主体内容
     hasBody(obj: unknown) {
       return obj && (obj as any).__isVue
     },
+    // 展开时的主体样式
     body(obj: unknown) {
       if (obj && (obj as any).__isVue) {
         return [
@@ -137,6 +144,9 @@ export function initCustomFormatter() {
     ]
   }
 
+  /**
+   * 基于对象的不同类型生成不同的颜色内容
+   */
   function formatValue(v: unknown, asRaw = true) {
     if (typeof v === 'number') {
       return ['span', numberStyle, v]
@@ -181,6 +191,9 @@ export function initCustomFormatter() {
     }
   }
 
+  /**
+   * 细化响应式的分类，区别文字显示
+   */
   function genRefFlag(v: Ref) {
     if (isShallow(v)) {
       return `ShallowRef`
@@ -191,6 +204,7 @@ export function initCustomFormatter() {
     return `Ref`
   }
 
+  // 添加自定义浏览器控制台样式
   if ((window as any).devtoolsFormatters) {
     ;(window as any).devtoolsFormatters.push(formatter)
   } else {

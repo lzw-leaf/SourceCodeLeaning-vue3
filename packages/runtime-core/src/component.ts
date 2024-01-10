@@ -1,7 +1,6 @@
-import { type VNode, type VNodeChild, isVNode } from './vnode'
+import type { CompilerOptions } from '@vue/compiler-core'
 import {
   EffectScope,
-  type ReactiveEffect,
   TrackOpTypes,
   isRef,
   markRaw,
@@ -10,57 +9,10 @@ import {
   resetTracking,
   shallowReadonly,
   track,
+  type ReactiveEffect,
 } from '@vue/reactivity'
 import {
-  type ComponentPublicInstance,
-  type ComponentPublicInstanceConstructor,
-  PublicInstanceProxyHandlers,
-  RuntimeCompiledPublicInstanceProxyHandlers,
-  createDevRenderContext,
-  exposePropsOnRenderContext,
-  exposeSetupStateOnRenderContext,
-  publicPropertiesMap,
-} from './componentPublicInstance'
-import {
-  type ComponentPropsOptions,
-  type NormalizedPropsOptions,
-  initProps,
-  normalizePropsOptions,
-} from './componentProps'
-import {
-  type InternalSlots,
-  type Slots,
-  type SlotsType,
-  type UnwrapSlotsType,
-  initSlots,
-} from './componentSlots'
-import { warn } from './warning'
-import { ErrorCodes, callWithErrorHandling, handleError } from './errorHandling'
-import {
-  type AppConfig,
-  type AppContext,
-  createAppContext,
-} from './apiCreateApp'
-import { type Directive, validateDirectiveName } from './directives'
-import {
-  type ComponentOptions,
-  type ComputedOptions,
-  type MethodOptions,
-  applyOptions,
-  resolveMergedOptions,
-} from './componentOptions'
-import {
-  type EmitFn,
-  type EmitsOptions,
-  type EmitsToProps,
-  type ObjectEmitsOptions,
-  type ShortEmitsToObject,
-  emit,
-  normalizeEmitsOptions,
-} from './componentEmits'
-import {
   EMPTY_OBJ,
-  type IfAny,
   NO,
   NOOP,
   ShapeFlags,
@@ -71,20 +23,68 @@ import {
   isObject,
   isPromise,
   makeMap,
+  type IfAny,
 } from '@vue/shared'
-import type { SuspenseBoundary } from './components/Suspense'
-import type { CompilerOptions } from '@vue/compiler-core'
-import { markAttrsAccessed } from './componentRenderUtils'
-import { currentRenderingInstance } from './componentRenderContext'
-import { endMeasure, startMeasure } from './profiling'
-import { convertLegacyRenderFn } from './compat/renderFn'
 import {
-  type CompatConfig,
+  createAppContext,
+  type AppConfig,
+  type AppContext,
+} from './apiCreateApp'
+import {
   globalCompatConfig,
   validateCompatConfig,
+  type CompatConfig,
 } from './compat/compatConfig'
-import type { SchedulerJob } from './scheduler'
+import { convertLegacyRenderFn } from './compat/renderFn'
+import {
+  emit,
+  normalizeEmitsOptions,
+  type EmitFn,
+  type EmitsOptions,
+  type EmitsToProps,
+  type ObjectEmitsOptions,
+  type ShortEmitsToObject,
+} from './componentEmits'
+import {
+  applyOptions,
+  resolveMergedOptions,
+  type ComponentOptions,
+  type ComputedOptions,
+  type MethodOptions,
+} from './componentOptions'
+import {
+  initProps,
+  normalizePropsOptions,
+  type ComponentPropsOptions,
+  type NormalizedPropsOptions,
+} from './componentProps'
+import {
+  PublicInstanceProxyHandlers,
+  RuntimeCompiledPublicInstanceProxyHandlers,
+  createDevRenderContext,
+  exposePropsOnRenderContext,
+  exposeSetupStateOnRenderContext,
+  publicPropertiesMap,
+  type ComponentPublicInstance,
+  type ComponentPublicInstanceConstructor,
+} from './componentPublicInstance'
+import { currentRenderingInstance } from './componentRenderContext'
+import { markAttrsAccessed } from './componentRenderUtils'
+import {
+  initSlots,
+  type InternalSlots,
+  type Slots,
+  type SlotsType,
+  type UnwrapSlotsType,
+} from './componentSlots'
+import type { SuspenseBoundary } from './components/Suspense'
+import { validateDirectiveName, type Directive } from './directives'
 import type { LifecycleHooks } from './enums'
+import { ErrorCodes, callWithErrorHandling, handleError } from './errorHandling'
+import { endMeasure, startMeasure } from './profiling'
+import type { SchedulerJob } from './scheduler'
+import { isVNode, type VNode, type VNodeChild } from './vnode'
+import { warn } from './warning'
 
 export type Data = Record<string, unknown>
 
@@ -884,7 +884,9 @@ let installWithProxy: (i: ComponentInternalInstance) => void
  * Note the exported method uses any to avoid d.ts relying on the compiler types.
  */
 export function registerRuntimeCompiler(_compile: any) {
+  // 将传递过来的编译器提升到文件作用域全局
   compile = _compile
+  // todo 猜测为运行时专门用于时时触发更新变化的相关逻辑
   installWithProxy = i => {
     if (i.render!._rc) {
       i.withProxy = new Proxy(i.ctx, RuntimeCompiledPublicInstanceProxyHandlers)

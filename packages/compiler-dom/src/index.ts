@@ -37,6 +37,7 @@ export const DOMDirectiveTransforms: Record<string, DirectiveTransform> = {
   show: transformShow,
 }
 
+// ！！编译器 划重点
 export function compile(
   src: string | RootNode,
   options: CompilerOptions = {},

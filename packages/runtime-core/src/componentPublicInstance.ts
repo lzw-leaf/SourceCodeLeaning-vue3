@@ -1,36 +1,39 @@
 import {
-  type ComponentInternalInstance,
-  type Data,
-  getExposeProxy,
-  isStatefulComponent,
-} from './component'
-import { nextTick, queueJob } from './scheduler'
-import {
-  type WatchOptions,
-  type WatchStopHandle,
-  instanceWatch,
-} from './apiWatch'
+  TrackOpTypes,
+  shallowReadonly,
+  toRaw,
+  track,
+  type ShallowUnwrapRef,
+  type UnwrapNestedRefs,
+} from '@vue/reactivity'
 import {
   EMPTY_OBJ,
-  type IfAny,
   NOOP,
-  type Prettify,
-  type UnionToIntersection,
   extend,
   hasOwn,
   isFunction,
   isGloballyAllowed,
   isString,
+  type IfAny,
+  type Prettify,
+  type UnionToIntersection,
 } from '@vue/shared'
 import {
-  type ShallowUnwrapRef,
-  TrackOpTypes,
-  type UnwrapNestedRefs,
-  shallowReadonly,
-  toRaw,
-  track,
-} from '@vue/reactivity'
+  instanceWatch,
+  type WatchOptions,
+  type WatchStopHandle,
+} from './apiWatch'
+import { installCompatInstanceProperties } from './compat/instance'
 import {
+  getExposeProxy,
+  isStatefulComponent,
+  type ComponentInternalInstance,
+  type Data,
+} from './component'
+import type { EmitFn, EmitsOptions } from './componentEmits'
+import {
+  resolveMergedOptions,
+  shouldCacheAccess,
   type ComponentInjectOptions,
   type ComponentOptionsBase,
   type ComponentOptionsMixin,
@@ -41,15 +44,12 @@ import {
   type MethodOptions,
   type OptionTypesKeys,
   type OptionTypesType,
-  resolveMergedOptions,
-  shouldCacheAccess,
 } from './componentOptions'
-import type { EmitFn, EmitsOptions } from './componentEmits'
-import type { SlotsType, UnwrapSlotsType } from './componentSlots'
-import { markAttrsAccessed } from './componentRenderUtils'
 import { currentRenderingInstance } from './componentRenderContext'
+import { markAttrsAccessed } from './componentRenderUtils'
+import type { SlotsType, UnwrapSlotsType } from './componentSlots'
+import { nextTick, queueJob } from './scheduler'
 import { warn } from './warning'
-import { installCompatInstanceProperties } from './compat/instance'
 
 /**
  * Custom properties added to component instances in any way and can be accessed through `this`
@@ -300,14 +300,22 @@ export interface ComponentRenderContext {
 
 export const isReservedPrefix = (key: string) => key === '_' || key === '$'
 
+/**
+ *  判断key是否存在于state内，注意会判断是否scricpt setup语法，如果是该语法会返回false
+ * @param state
+ * @param key
+ * @returns
+ */
 const hasSetupBinding = (state: Data, key: string) =>
   state !== EMPTY_OBJ && !state.__isScriptSetup && hasOwn(state, key)
 
+// 公共vue实例使用的proxy,往往作为其他proxy的地基,不一定最终生效
 export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   get({ _: instance }: ComponentRenderContext, key: string) {
     const { ctx, setupState, data, props, accessCache, type, appContext } =
       instance
 
+    // 如注释所说,一般开发模式能触发此get一定是vue实例 所以固定返回true
     // for internal formatters to know that this is a Vue instance
     if (__DEV__ && key === '__isVue') {
       return true
@@ -320,6 +328,12 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     // access on a plain object, so we use an accessCache object (with null
     // prototype) to memoize what access type a key corresponds to.
     let normalizedProps
+
+    // todoo accessCache在别处声明,后续补充细节
+    // 为减少hasOwn()频繁调用产生的性能开销,使用accessCache记录已访问过的key类型
+    // 如上述注释所描述的那样
+    // 分为data(Composition API,和options API),props,ctx(非实例的上下文this)
+    // 有accessCache缓存则无需今昔hasOwn()等一些验证判断,直接返回对应值
     if (key[0] !== '$') {
       const n = accessCache![key]
       if (n !== undefined) {
@@ -425,7 +439,10 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     value: any,
   ): boolean {
     const { data, setupState, ctx } = instance
+
     if (hasSetupBinding(setupState, key)) {
+      // 如果不是script setup写法，并且存在绑定则触发值更新
+      // todo 猜测此处只会处理函数式的setup写法
       setupState[key] = value
       return true
     } else if (
@@ -433,17 +450,21 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
       setupState.__isScriptSetup &&
       hasOwn(setupState, key)
     ) {
+      // 禁止在options api写法内更新<script setup> 的绑定值
       warn(`Cannot mutate <script setup> binding "${key}" from Options API.`)
       return false
     } else if (data !== EMPTY_OBJ && hasOwn(data, key)) {
+      // options api 即传统vue2写法模式的值更新
       data[key] = value
       return true
     } else if (hasOwn(instance.props, key)) {
+      // 禁止实例修改自身props值
       __DEV__ && warn(`Attempting to mutate prop "${key}". Props are readonly.`)
       return false
     }
     if (key[0] === '$' && key.slice(1) in instance) {
       __DEV__ &&
+        // 禁止修改实例上带有$保留符的属性的值
         warn(
           `Attempting to mutate public property "${key}". ` +
             `Properties starting with $ are reserved and readonly.`,
@@ -451,12 +472,15 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
       return false
     } else {
       if (__DEV__ && key in instance.appContext.config.globalProperties) {
+        // 验证是否存在于app全局变量中,如果存在则更新起值
+        // todo 通过defineProperty修改猜测是为了enumerable\configurable,为何设计待研究
         Object.defineProperty(ctx, key, {
           enumerable: true,
           configurable: true,
           value,
         })
       } else {
+        // 如果都不是并且存在于上下文里则更新起值
         ctx[key] = value
       }
     }
@@ -505,7 +529,7 @@ if (__DEV__ && !__TEST__) {
     return Reflect.ownKeys(target)
   }
 }
-
+// /*#__PURE__*/是一种打包标记，告诉打包器这个函数是要给纯函数即如果没用到打包的时候可以直接删了，多个打包工具都支持此类标记，此处标记服务于 esbuild
 export const RuntimeCompiledPublicInstanceProxyHandlers = /*#__PURE__*/ extend(
   {},
   PublicInstanceProxyHandlers,

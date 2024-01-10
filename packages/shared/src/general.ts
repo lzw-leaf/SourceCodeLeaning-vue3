@@ -1,5 +1,8 @@
 import { makeMap } from './makeMap'
 
+/**
+ * 全局定义空对象和空数组，后续赋值空对象和空数组是直接使用该内容，好处是方便判断为空的情况，通过冻结也避免了可更改值的情况，变化是不能直接给对应变量赋值
+ */
 export const EMPTY_OBJ: { readonly [key: string]: any } = __DEV__
   ? Object.freeze({})
   : {}
@@ -30,6 +33,9 @@ export const remove = <T>(arr: T[], el: T) => {
 }
 
 const hasOwnProperty = Object.prototype.hasOwnProperty
+/**
+ * 通过利用call机制将原型判断从对应对象上解耦，通过传参判断key是否存在val中
+ */
 export const hasOwn = (
   val: object,
   key: string | symbol,
